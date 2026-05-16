@@ -84,9 +84,33 @@ enum FindingCategory {
 
 type Finding {
   id: ID!
+  inspectionId: ID!
+  inspection: Inspection!
   category: FindingCategory!
   severity: Int!
   estimatedCost: Float!
+  notes: String
+}
+
+type FindingConnection {
+  items: [Finding!]!
+  totalCount: Int!
+  page: Int!
+  limit: Int!
+}
+
+input FindingCreateInput {
+  inspectionId: ID!
+  category: FindingCategory!
+  severity: Int!
+  estimatedCost: Float!
+  notes: String
+}
+
+input FindingUpdateInput {
+  category: FindingCategory
+  severity: Int
+  estimatedCost: Float
   notes: String
 }
 
@@ -115,6 +139,15 @@ type Query {
     dataSource: DataSource
   ): InspectionConnection!
   inspection(id: ID!): Inspection
+  findings(
+    page: Int
+    limit: Int
+    inspectionId: ID
+    category: FindingCategory
+    severity: Int
+    notesContains: String
+  ): FindingConnection!
+  finding(id: ID!): Finding
   repairPlan(inspectionId: ID!): RepairPlan
 }
 
@@ -125,5 +158,8 @@ type Mutation {
   createInspection(input: InspectionCreateInput!): Inspection!
   updateInspection(id: ID!, input: InspectionUpdateInput!): Inspection!
   deleteInspection(id: ID!): Boolean!
+  createFinding(input: FindingCreateInput!): Finding!
+  updateFinding(id: ID!, input: FindingUpdateInput!): Finding!
+  deleteFinding(id: ID!): Boolean!
   generateRepairPlan(inspectionId: ID!): RepairPlan!
 }

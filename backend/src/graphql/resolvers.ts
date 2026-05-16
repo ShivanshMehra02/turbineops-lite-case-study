@@ -13,12 +13,24 @@ import {
   updateInspection,
 } from '../services/inspection.service';
 import {
+  createFinding,
+  deleteFinding,
+  findFindingById,
+  listFindings,
+  updateFinding,
+} from '../services/finding.service';
+import {
   createTurbine,
   deleteTurbine,
   findTurbineById,
   listTurbines,
   updateTurbine,
 } from '../services/turbine.service';
+import {
+  findingCreateBodySchema,
+  findingListGraphQLArgsSchema,
+  findingUpdateBodySchema,
+} from '../validators/finding.validator';
 import {
   inspectionCreateBodySchema,
   inspectionListGraphQLArgsSchema,
@@ -81,6 +93,35 @@ export function buildResolvers(deps: {
         ensurePermission(ctx, 'read');
         return findInspectionById(prisma, args.id);
       },
+      findings: async (
+        _: unknown,
+        args: {
+          page?: number | null;
+          limit?: number | null;
+          inspectionId?: string | null;
+          category?: string | null;
+          severity?: number | null;
+          notesContains?: string | null;
+        },
+        ctx: GraphQLContext,
+      ) => {
+        ensurePermission(ctx, 'read');
+        const parsed = parseGraphQLInput(findingListGraphQLArgsSchema, args);
+        const page = Math.max(1, parsed.page ?? DEFAULT_PAGE);
+        const limit = Math.min(MAX_LIMIT, Math.max(1, parsed.limit ?? DEFAULT_LIMIT));
+        return listFindings(prisma, {
+          page,
+          limit,
+          inspectionId: parsed.inspectionId,
+          category: parsed.category,
+          severity: parsed.severity,
+          notesContains: parsed.notesContains,
+        });
+      },
+      finding: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
+        ensurePermission(ctx, 'read');
+        return findFindingById(prisma, args.id);
+      },
       repairPlan: async (_: unknown, args: { inspectionId: string }, ctx: GraphQLContext) => {
         ensurePermission(ctx, 'read');
         return prisma.repairPlan.findUnique({ where: { inspectionId: args.inspectionId } });
@@ -125,6 +166,25 @@ export function buildResolvers(deps: {
         await gqlFromService(() => deleteInspection(prisma, args.id));
         return true;
       },
+      createFinding: async (_: unknown, args: { input: Record<string, unknown> }, ctx: GraphQLContext) => {
+        ensurePermission(ctx, 'write');
+        const input = parseGraphQLInput(findingCreateBodySchema, args.input);
+        return gqlFromService(() => createFinding(prisma, input));
+      },
+      updateFinding: async (
+        _: unknown,
+        args: { id: string; input: Record<string, unknown> },
+        ctx: GraphQLContext,
+      ) => {
+        ensurePermission(ctx, 'write');
+        const input = parseGraphQLInput(findingUpdateBodySchema, args.input);
+        return gqlFromService(() => updateFinding(prisma, args.id, input));
+      },
+      deleteFinding: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
+        ensurePermission(ctx, 'admin');
+        await gqlFromService(() => deleteFinding(prisma, args.id));
+        return true;
+      },
       generateRepairPlan: async (_: unknown, args: { inspectionId: string }, ctx: GraphQLContext) => {
         ensurePermission(ctx, 'write');
         return generateRepairPlanForInspection(prisma, args.inspectionId, {
@@ -164,7 +224,11 @@ export function buildResolvers(deps: {
         if ('findings' in parent && Array.isArray((parent as { findings?: unknown }).findings)) {
           return (parent as { findings: unknown[] }).findings;
         }
-        return prisma.finding.findMany({ where: { inspectionId: parent.id }, orderBy: { id: 'asc' } });
+        return prisma.finding.findMany({
+          where: { inspectionId: parent.id },
+          orderBy: { id: 'asc' },
+          include: { inspection: true },
+        });
       },
       repairPlan: async (parent: { id: string }, _args: unknown, ctx: GraphQLContext) => {
         ensurePermission(ctx, 'read');
@@ -172,6 +236,18 @@ export function buildResolvers(deps: {
           return (parent as { repairPlan: unknown }).repairPlan;
         }
         return prisma.repairPlan.findUnique({ where: { inspectionId: parent.id } });
+      },
+    },
+    Finding: {
+      inspection: async (
+        parent: { inspection?: { id: string }; inspectionId: string },
+        _args: unknown,
+        ctx: GraphQLContext,
+      ) => {
+        ensurePermission(ctx, 'read');
+        if (parent.inspection) return parent.inspection;
+        const row = await prisma.inspection.findUnique({ where: { id: parent.inspectionId } });
+        return row;
       },
     },
     RepairPlan: {

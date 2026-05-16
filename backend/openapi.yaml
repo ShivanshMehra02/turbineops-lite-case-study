@@ -274,6 +274,118 @@ paths:
         '401': { description: Unauthorized }
         '403': { description: Forbidden }
         '404': { description: Not found }
+  /findings:
+    get:
+      summary: List findings (paginated; optional filters)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: inspection_id
+          description: Restrict to findings for this inspection
+          schema: { type: string }
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [BLADE_DAMAGE, LIGHTNING, EROSION, UNKNOWN]
+        - in: query
+          name: severity
+          description: Exact severity (1–5)
+          schema: { type: integer, minimum: 1, maximum: 5 }
+        - in: query
+          name: notes_contains
+          description: Case-insensitive substring match on notes
+          schema: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Paginated findings (includes parent inspection)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingConnection'
+        '400': { description: Invalid query parameters }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+    post:
+      summary: Create finding (ENGINEER+). BLADE_DAMAGE + notes mentioning crack require severity >= 4.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FindingCreateRest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingWithInspection'
+        '400': { description: Validation error (including business rules) }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Inspection not found }
+  /findings/{id}:
+    get:
+      summary: Get finding by id (VIEWER+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FindingId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingWithInspection'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Not found }
+    patch:
+      summary: Update finding (ENGINEER+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FindingId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FindingUpdateRest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingWithInspection'
+        '400': { description: Validation error }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Not found }
+    delete:
+      summary: Delete finding (ADMIN only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FindingId'
+      responses:
+        '204':
+          description: Deleted
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Not found }
 components:
   securitySchemes:
     bearerAuth:
@@ -288,6 +400,12 @@ components:
       schema:
         type: string
     InspectionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    FindingId:
       name: id
       in: path
       required: true
@@ -419,3 +537,57 @@ components:
           type: string
           enum: [DRONE, MANUAL]
         raw_package_url: { type: string, nullable: true }
+    Finding:
+      type: object
+      properties:
+        id: { type: string }
+        inspectionId: { type: string }
+        category:
+          type: string
+          enum: [BLADE_DAMAGE, LIGHTNING, EROSION, UNKNOWN]
+        severity: { type: integer, minimum: 1, maximum: 5 }
+        estimatedCost: { type: number, format: float }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    FindingWithInspection:
+      allOf:
+        - $ref: '#/components/schemas/Finding'
+        - type: object
+          properties:
+            inspection:
+              $ref: '#/components/schemas/Inspection'
+    FindingConnection:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FindingWithInspection'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+    FindingCreateRest:
+      type: object
+      required: [inspection_id, category, severity, estimated_cost]
+      properties:
+        inspection_id: { type: string }
+        category:
+          type: string
+          enum: [BLADE_DAMAGE, LIGHTNING, EROSION, UNKNOWN]
+        severity: { type: integer, minimum: 1, maximum: 5 }
+        estimated_cost: { type: number, minimum: 0 }
+        notes: { type: string, nullable: true }
+    FindingUpdateRest:
+      type: object
+      minProperties: 1
+      properties:
+        category:
+          type: string
+          enum: [BLADE_DAMAGE, LIGHTNING, EROSION, UNKNOWN]
+        severity: { type: integer, minimum: 1, maximum: 5 }
+        estimated_cost: { type: number, minimum: 0 }
+        notes: { type: string, nullable: true }

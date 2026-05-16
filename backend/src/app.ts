@@ -14,6 +14,7 @@ import { requirePermission } from './middleware/require-permission';
 import { createAuthRouter } from './modules/auth/auth.routes';
 import { sseEventsHandler, notifyPlan } from './modules/events/sse.routes';
 import { healthRouter } from './modules/health/health.routes';
+import { findingsRouter } from './modules/findings/findings.routes';
 import { inspectionsRouter } from './modules/inspections/inspections.routes';
 import { turbinesRouter } from './modules/turbines/turbines.routes';
 
@@ -36,6 +37,8 @@ export async function createApp(env: Env, mongoClient: MongoClient | null): Prom
   app.use('/api/turbines', authenticate, turbinesRouter);
 
   app.use('/api/inspections', authenticate, inspectionsRouter);
+
+  app.use('/api/findings', authenticate, findingsRouter);
 
   app.get('/api/events', authenticate, requirePermission('read'), sseEventsHandler);
 

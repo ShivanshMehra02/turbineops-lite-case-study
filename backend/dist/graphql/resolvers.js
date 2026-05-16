@@ -4,7 +4,9 @@ import { parseGraphQLInput } from './parse-graphql-input';
 import { ensurePermission } from './guards';
 import { generateRepairPlanForInspection } from '../services/repair-plan.service';
 import { createInspection, deleteInspection, findInspectionById, listInspections, updateInspection, } from '../services/inspection.service';
+import { createFinding, deleteFinding, findFindingById, listFindings, updateFinding, } from '../services/finding.service';
 import { createTurbine, deleteTurbine, findTurbineById, listTurbines, updateTurbine, } from '../services/turbine.service';
+import { findingCreateBodySchema, findingListGraphQLArgsSchema, findingUpdateBodySchema, } from '../validators/finding.validator';
 import { inspectionCreateBodySchema, inspectionListGraphQLArgsSchema, inspectionUpdateBodySchema, } from '../validators/inspection.validator';
 import { turbineCreateBodySchema, turbineUpdateBodySchema, } from '../validators/turbines.validator';
 import { MAX_LIMIT, DEFAULT_LIMIT, DEFAULT_PAGE } from '../utils/pagination';
@@ -39,6 +41,24 @@ export function buildResolvers(deps) {
             inspection: async (_, args, ctx) => {
                 ensurePermission(ctx, 'read');
                 return findInspectionById(prisma, args.id);
+            },
+            findings: async (_, args, ctx) => {
+                ensurePermission(ctx, 'read');
+                const parsed = parseGraphQLInput(findingListGraphQLArgsSchema, args);
+                const page = Math.max(1, parsed.page ?? DEFAULT_PAGE);
+                const limit = Math.min(MAX_LIMIT, Math.max(1, parsed.limit ?? DEFAULT_LIMIT));
+                return listFindings(prisma, {
+                    page,
+                    limit,
+                    inspectionId: parsed.inspectionId,
+                    category: parsed.category,
+                    severity: parsed.severity,
+                    notesContains: parsed.notesContains,
+                });
+            },
+            finding: async (_, args, ctx) => {
+                ensurePermission(ctx, 'read');
+                return findFindingById(prisma, args.id);
             },
             repairPlan: async (_, args, ctx) => {
                 ensurePermission(ctx, 'read');
@@ -76,6 +96,21 @@ export function buildResolvers(deps) {
                 await gqlFromService(() => deleteInspection(prisma, args.id));
                 return true;
             },
+            createFinding: async (_, args, ctx) => {
+                ensurePermission(ctx, 'write');
+                const input = parseGraphQLInput(findingCreateBodySchema, args.input);
+                return gqlFromService(() => createFinding(prisma, input));
+            },
+            updateFinding: async (_, args, ctx) => {
+                ensurePermission(ctx, 'write');
+                const input = parseGraphQLInput(findingUpdateBodySchema, args.input);
+                return gqlFromService(() => updateFinding(prisma, args.id, input));
+            },
+            deleteFinding: async (_, args, ctx) => {
+                ensurePermission(ctx, 'admin');
+                await gqlFromService(() => deleteFinding(prisma, args.id));
+                return true;
+            },
             generateRepairPlan: async (_, args, ctx) => {
                 ensurePermission(ctx, 'write');
                 return generateRepairPlanForInspection(prisma, args.inspectionId, {
@@ -111,7 +146,11 @@ export function buildResolvers(deps) {
                 if ('findings' in parent && Array.isArray(parent.findings)) {
                     return parent.findings;
                 }
-                return prisma.finding.findMany({ where: { inspectionId: parent.id }, orderBy: { id: 'asc' } });
+                return prisma.finding.findMany({
+                    where: { inspectionId: parent.id },
+                    orderBy: { id: 'asc' },
+                    include: { inspection: true },
+                });
             },
             repairPlan: async (parent, _args, ctx) => {
                 ensurePermission(ctx, 'read');
@@ -119,6 +158,15 @@ export function buildResolvers(deps) {
                     return parent.repairPlan;
                 }
                 return prisma.repairPlan.findUnique({ where: { inspectionId: parent.id } });
+            },
+        },
+        Finding: {
+            inspection: async (parent, _args, ctx) => {
+                ensurePermission(ctx, 'read');
+                if (parent.inspection)
+                    return parent.inspection;
+                const row = await prisma.inspection.findUnique({ where: { id: parent.inspectionId } });
+                return row;
             },
         },
         RepairPlan: {
