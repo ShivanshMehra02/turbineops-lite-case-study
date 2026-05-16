@@ -27,7 +27,10 @@ export async function createApp(env: Env, mongoClient: MongoClient | null): Prom
 
   const openapiPath = path.join(process.cwd(), 'openapi.yaml');
   const openapiDoc = yaml.parse(readFileSync(openapiPath, 'utf8'));
-  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiDoc));
+
+  /** Preferred path (`/api-docs`); Swagger UI static assets resolve under this prefix. */
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiDoc));
+  app.get(['/api/docs', '/api/docs/'], (_req, res) => res.redirect(301, '/api-docs'));
 
   app.use('/api', healthRouter);
 

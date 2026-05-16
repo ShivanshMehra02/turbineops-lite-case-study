@@ -53,7 +53,7 @@ GraphQL (requires Bearer):
 
 ## REST (OpenAPI)
 
-- Swagger UI at: `http://localhost:4000/api/docs`
+- Swagger UI at: `http://localhost:4000/api-docs` (`/api/docs` redirects here)
 - Spec: `backend/openapi.yaml`
 
 ## GraphQL

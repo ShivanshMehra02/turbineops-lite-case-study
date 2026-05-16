@@ -13,7 +13,7 @@ docker compose up --build
 ```
 
 - **Frontend**: http://localhost:3000 (static build; API base URL `http://localhost:4000` is baked in at image build via `VITE_API_BASE`)
-- **REST / Swagger**: http://localhost:4000/api (`/api/docs` for Swagger UI)
+- **REST / Swagger**: http://localhost:4000/api (`http://localhost:4000/api-docs` for Swagger UI)
 - **GraphQL**: http://localhost:4000/graphql  
 - **Postgres**: `localhost:5432` / **Mongo**: `localhost:27017`
 
