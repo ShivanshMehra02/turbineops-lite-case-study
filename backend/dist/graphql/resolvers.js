@@ -3,7 +3,9 @@ import { gqlFromService } from './http-mapper';
 import { parseGraphQLInput } from './parse-graphql-input';
 import { ensurePermission } from './guards';
 import { generateRepairPlanForInspection } from '../services/repair-plan.service';
+import { createInspection, deleteInspection, findInspectionById, listInspections, updateInspection, } from '../services/inspection.service';
 import { createTurbine, deleteTurbine, findTurbineById, listTurbines, updateTurbine, } from '../services/turbine.service';
+import { inspectionCreateBodySchema, inspectionListGraphQLArgsSchema, inspectionUpdateBodySchema, } from '../validators/inspection.validator';
 import { turbineCreateBodySchema, turbineUpdateBodySchema, } from '../validators/turbines.validator';
 import { MAX_LIMIT, DEFAULT_LIMIT, DEFAULT_PAGE } from '../utils/pagination';
 export function buildResolvers(deps) {
@@ -20,12 +22,23 @@ export function buildResolvers(deps) {
                 ensurePermission(ctx, 'read');
                 return findTurbineById(prisma, args.id);
             },
+            inspections: async (_, args, ctx) => {
+                ensurePermission(ctx, 'read');
+                const parsed = parseGraphQLInput(inspectionListGraphQLArgsSchema, args);
+                const page = Math.max(1, parsed.page ?? DEFAULT_PAGE);
+                const limit = Math.min(MAX_LIMIT, Math.max(1, parsed.limit ?? DEFAULT_LIMIT));
+                return listInspections(prisma, {
+                    page,
+                    limit,
+                    turbineId: parsed.turbineId,
+                    dateFrom: parsed.dateFrom,
+                    dateTo: parsed.dateTo,
+                    dataSource: parsed.dataSource,
+                });
+            },
             inspection: async (_, args, ctx) => {
                 ensurePermission(ctx, 'read');
-                return prisma.inspection.findUnique({
-                    where: { id: args.id },
-                    include: { turbine: true, findings: true, repairPlan: true },
-                });
+                return findInspectionById(prisma, args.id);
             },
             repairPlan: async (_, args, ctx) => {
                 ensurePermission(ctx, 'read');
@@ -46,6 +59,21 @@ export function buildResolvers(deps) {
             deleteTurbine: async (_, args, ctx) => {
                 ensurePermission(ctx, 'admin');
                 await gqlFromService(() => deleteTurbine(prisma, args.id));
+                return true;
+            },
+            createInspection: async (_, args, ctx) => {
+                ensurePermission(ctx, 'write');
+                const input = parseGraphQLInput(inspectionCreateBodySchema, args.input);
+                return gqlFromService(() => createInspection(prisma, input));
+            },
+            updateInspection: async (_, args, ctx) => {
+                ensurePermission(ctx, 'write');
+                const input = parseGraphQLInput(inspectionUpdateBodySchema, args.input);
+                return gqlFromService(() => updateInspection(prisma, args.id, input));
+            },
+            deleteInspection: async (_, args, ctx) => {
+                ensurePermission(ctx, 'admin');
+                await gqlFromService(() => deleteInspection(prisma, args.id));
                 return true;
             },
             generateRepairPlan: async (_, args, ctx) => {
@@ -70,6 +98,28 @@ export function buildResolvers(deps) {
         },
         Inspection: {
             date: (parent) => parent.date.toISOString(),
+            inspectionDay: (parent) => parent.inspectionDay.toISOString().slice(0, 10),
+            turbine: async (parent, _args, ctx) => {
+                ensurePermission(ctx, 'read');
+                if (parent.turbine)
+                    return parent.turbine;
+                const row = await prisma.turbine.findUnique({ where: { id: parent.turbineId } });
+                return row;
+            },
+            findings: async (parent, _args, ctx) => {
+                ensurePermission(ctx, 'read');
+                if ('findings' in parent && Array.isArray(parent.findings)) {
+                    return parent.findings;
+                }
+                return prisma.finding.findMany({ where: { inspectionId: parent.id }, orderBy: { id: 'asc' } });
+            },
+            repairPlan: async (parent, _args, ctx) => {
+                ensurePermission(ctx, 'read');
+                if ('repairPlan' in parent) {
+                    return parent.repairPlan;
+                }
+                return prisma.repairPlan.findUnique({ where: { inspectionId: parent.id } });
+            },
         },
         RepairPlan: {
             createdAt: (parent) => parent.createdAt.toISOString(),

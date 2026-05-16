@@ -157,6 +157,123 @@ paths:
         '404': { description: Not found }
         '409':
           description: Conflict — dependent inspections exist
+  /inspections:
+    get:
+      summary: List inspections (paginated, filterable)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: turbine_id
+          description: Restrict to a single turbine id
+          schema: { type: string }
+        - in: query
+          name: from
+          description: Lower bound on inspection `date` (instant), inclusive
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          description: Upper bound on inspection `date` (instant), inclusive
+          schema: { type: string, format: date-time }
+        - in: query
+          name: data_source
+          schema:
+            type: string
+            enum: [DRONE, MANUAL]
+      responses:
+        '200':
+          description: Paginated inspections (includes nested turbine)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionConnection'
+        '400':
+          description: Invalid query parameters
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+    post:
+      summary: Create inspection (ENGINEER+). Same turbine cannot have two inspections on the same UTC calendar day.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectionCreateRest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionWithTurbine'
+        '400': { description: Validation error }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Turbine not found }
+        '409':
+          description: Overlap conflict — code INSPECTION_OVERLAP
+  /inspections/{id}:
+    get:
+      summary: Get inspection by id including findings and repair plan (VIEWER+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InspectionId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionDetail'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Not found }
+    patch:
+      summary: Update inspection (ENGINEER+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InspectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectionUpdateRest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionWithTurbine'
+        '400': { description: Validation error }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Not found }
+        '409':
+          description: Overlap conflict — code INSPECTION_OVERLAP
+    delete:
+      summary: Delete inspection (ADMIN only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InspectionId'
+      responses:
+        '204':
+          description: Deleted
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Not found }
 components:
   securitySchemes:
     bearerAuth:
@@ -165,6 +282,12 @@ components:
       bearerFormat: JWT
   parameters:
     TurbineId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    InspectionId:
       name: id
       in: path
       required: true
@@ -213,3 +336,86 @@ components:
           type: integer
         limit:
           type: integer
+    Inspection:
+      type: object
+      properties:
+        id: { type: string }
+        date: { type: string, format: date-time }
+        inspectionDay: { type: string, format: date }
+        inspectorName: { type: string, nullable: true }
+        dataSource:
+          type: string
+          enum: [DRONE, MANUAL]
+        rawPackageUrl: { type: string, nullable: true }
+        turbineId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    InspectionWithTurbine:
+      allOf:
+        - $ref: '#/components/schemas/Inspection'
+        - type: object
+          properties:
+            turbine:
+              $ref: '#/components/schemas/Turbine'
+    InspectionDetail:
+      allOf:
+        - $ref: '#/components/schemas/InspectionWithTurbine'
+        - type: object
+          properties:
+            findings:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string }
+                  category:
+                    type: string
+                    enum: [BLADE_DAMAGE, LIGHTNING, EROSION, UNKNOWN]
+                  severity: { type: integer }
+                  estimatedCost: { type: number }
+                  notes: { type: string, nullable: true }
+            repairPlan:
+              nullable: true
+              type: object
+              properties:
+                id: { type: string }
+                priority:
+                  type: string
+                  enum: [LOW, MEDIUM, HIGH]
+                totalEstimatedCost: { type: number }
+                createdAt: { type: string, format: date-time }
+    InspectionConnection:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InspectionWithTurbine'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+    InspectionCreateRest:
+      type: object
+      required: [turbine_id, date, data_source]
+      properties:
+        turbine_id: { type: string }
+        date: { type: string, format: date-time }
+        inspector_name: { type: string, nullable: true }
+        data_source:
+          type: string
+          enum: [DRONE, MANUAL]
+        raw_package_url: { type: string, nullable: true }
+    InspectionUpdateRest:
+      type: object
+      minProperties: 1
+      properties:
+        turbine_id: { type: string }
+        date: { type: string, format: date-time }
+        inspector_name: { type: string, nullable: true }
+        data_source:
+          type: string
+          enum: [DRONE, MANUAL]
+        raw_package_url: { type: string, nullable: true }

@@ -45,11 +45,13 @@ model Turbine {
   @@index([name])
 }
 
-/// One row per inspection event for a turbine. `date` is the canonical inspection instant used for overlap prevention.
+/// Inspection tied to a turbine. Overlap rule: **one inspection per turbine per UTC calendar day**, enforced via `inspectionDay` + DB unique index.
 model Inspection {
   id              String       @id @default(cuid())
-  /// Instant the inspection represents (UTC stored as TIMESTAMP(3)). Uniqueness is per exact timestamp + turbine.
+  /// Canonical instant for the inspection event (TIMESTAMP(3), convention: store UTC).
   date            DateTime
+  /// UTC calendar date (`DATE`) derived from `date`; must stay in sync on writes — uniqueness prevents double-booking the same turbine/day.
+  inspectionDay   DateTime     @db.Date
   inspectorName   String?
   dataSource      DataSource
   rawPackageUrl   String?
@@ -60,8 +62,9 @@ model Inspection {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  /// Prevents two inspections for the same turbine at the exact same stored instant (DB-enforced).
-  @@unique([turbineId, date])
+  @@unique([turbineId, inspectionDay])
+  @@index([turbineId, date])
+  @@index([dataSource])
 }
 
 enum DataSource {

@@ -40,13 +40,39 @@ enum DataSource {
 
 type Inspection {
   id: ID!
+  """Instant (UTC) when the inspection occurred."""
   date: String!
+  """UTC calendar date bucket used for overlap enforcement (YYYY-MM-DD)."""
+  inspectionDay: String!
   inspectorName: String
   dataSource: DataSource!
   rawPackageUrl: String
   turbine: Turbine!
   findings: [Finding!]!
   repairPlan: RepairPlan
+}
+
+type InspectionConnection {
+  items: [Inspection!]!
+  totalCount: Int!
+  page: Int!
+  limit: Int!
+}
+
+input InspectionCreateInput {
+  turbineId: ID!
+  date: String!
+  inspectorName: String
+  dataSource: DataSource!
+  rawPackageUrl: String
+}
+
+input InspectionUpdateInput {
+  turbineId: ID
+  date: String
+  inspectorName: String
+  dataSource: DataSource
+  rawPackageUrl: String
 }
 
 enum FindingCategory {
@@ -80,6 +106,14 @@ type RepairPlan {
 type Query {
   turbines(page: Int, limit: Int, nameContains: String): TurbineConnection!
   turbine(id: ID!): Turbine
+  inspections(
+    page: Int
+    limit: Int
+    turbineId: ID
+    dateFrom: String
+    dateTo: String
+    dataSource: DataSource
+  ): InspectionConnection!
   inspection(id: ID!): Inspection
   repairPlan(inspectionId: ID!): RepairPlan
 }
@@ -88,5 +122,8 @@ type Mutation {
   createTurbine(input: TurbineCreateInput!): Turbine!
   updateTurbine(id: ID!, input: TurbineUpdateInput!): Turbine!
   deleteTurbine(id: ID!): Boolean!
+  createInspection(input: InspectionCreateInput!): Inspection!
+  updateInspection(id: ID!, input: InspectionUpdateInput!): Inspection!
+  deleteInspection(id: ID!): Boolean!
   generateRepairPlan(inspectionId: ID!): RepairPlan!
 }

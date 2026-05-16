@@ -14,6 +14,7 @@ import { requirePermission } from './middleware/require-permission';
 import { createAuthRouter } from './modules/auth/auth.routes';
 import { sseEventsHandler, notifyPlan } from './modules/events/sse.routes';
 import { healthRouter } from './modules/health/health.routes';
+import { inspectionsRouter } from './modules/inspections/inspections.routes';
 import { turbinesRouter } from './modules/turbines/turbines.routes';
 
 export async function createApp(env: Env, mongoClient: MongoClient | null): Promise<Application> {
@@ -33,6 +34,8 @@ export async function createApp(env: Env, mongoClient: MongoClient | null): Prom
   const authenticate = createAuthenticateMiddleware(env);
 
   app.use('/api/turbines', authenticate, turbinesRouter);
+
+  app.use('/api/inspections', authenticate, inspectionsRouter);
 
   app.get('/api/events', authenticate, requirePermission('read'), sseEventsHandler);
 

@@ -1,7 +1,7 @@
 import { GraphQLError } from 'graphql';
-import type { ZodSchema } from 'zod';
+import type { ZodType, ZodTypeDef } from 'zod';
 
-export function parseGraphQLInput<T>(schema: ZodSchema<T>, input: unknown): T {
+export function parseGraphQLInput<T>(schema: ZodType<T, ZodTypeDef, unknown>, input: unknown): T {
   const result = schema.safeParse(input ?? {});
   if (!result.success) {
     throw new GraphQLError('Invalid input', {

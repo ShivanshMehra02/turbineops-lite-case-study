@@ -2,7 +2,9 @@ import type { Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { prisma } from './db/prisma';
 
-/** Fixed instant so @@unique([turbineId, date]) stays stable across re-seeds. */
+import { toUtcInspectionCalendarDate } from './utils/inspection-day';
+
+/** Fixed instant; uniqueness is enforced on `(turbineId, inspectionDay UTC date)`. */
 const SEED_INSPECTION_DATE = new Date('2025-01-15T12:00:00.000Z');
 
 async function main() {
@@ -40,14 +42,24 @@ async function main() {
   });
 
   await prisma.$transaction(async (tx) => {
+    const inspectionDay = toUtcInspectionCalendarDate(SEED_INSPECTION_DATE);
+
     const inspection = await tx.inspection.upsert({
       where: {
-        turbineId_date: { turbineId: turbine.id, date: SEED_INSPECTION_DATE },
+        turbineId_inspectionDay: {
+          turbineId: turbine.id,
+          inspectionDay,
+        },
       },
-      update: {},
+      update: {
+        date: SEED_INSPECTION_DATE,
+        dataSource: 'DRONE',
+        inspectorName: 'Seed Bot',
+      },
       create: {
         turbineId: turbine.id,
         date: SEED_INSPECTION_DATE,
+        inspectionDay,
         dataSource: 'DRONE',
         inspectorName: 'Seed Bot',
       },

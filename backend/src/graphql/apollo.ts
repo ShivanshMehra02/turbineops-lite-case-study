@@ -41,6 +41,7 @@ export async function attachGraphQL(
         code === 'BAD_USER_INPUT' ||
         code === 'NOT_FOUND' ||
         code === 'CONFLICT' ||
+        code === 'INSPECTION_OVERLAP' ||
         code === 'VALIDATION_ERROR';
       if (safe) {
         return err;
