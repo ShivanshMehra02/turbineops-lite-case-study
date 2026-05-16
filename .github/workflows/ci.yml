@@ -8,6 +8,25 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://app:app@localhost:5432/turbineops
+      JWT_SECRET: ci-integration-jwt-secret-32chars-min!
+      INTEGRATION_TESTS: '1'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: turbineops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d turbineops"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,10 +37,12 @@ jobs:
           cd backend
           npm ci
           npm run build
+          npx prisma migrate deploy
+          node dist/seed.js
           npm test -- --passWithNoTests
       - name: Frontend
         run: |
           cd frontend
           npm ci
           npm run build
-          npm test -- --watch=false || true
+          npm test

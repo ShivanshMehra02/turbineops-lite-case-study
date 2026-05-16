@@ -19,4 +19,4 @@ seed:
 	cd backend && npm run seed
 
 test:
-	cd backend && npm test -- --passWithNoTests && cd ../frontend && npm test -- --watch=false || true
+	cd backend && npm test -- --passWithNoTests && cd ../frontend && npm test

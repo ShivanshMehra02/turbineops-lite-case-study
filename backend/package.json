@@ -9,10 +9,12 @@
     "start": "node dist/main.js",
     "lint": "eslint .",
     "test": "jest",
+    "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "seed": "ts-node src/seed.ts"
+    "preseed": "npm run build",
+    "seed": "node dist/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^5.19.0",
