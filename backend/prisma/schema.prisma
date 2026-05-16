@@ -1,3 +1,7 @@
+// TurbineOps Lite — PostgreSQL schema (modular monolith)
+// Table names remain Prisma defaults ("User", "Turbine", …) for migration continuity.
+// For greenfield deploys, consider @@map("users") etc. and snake_case columns in a dedicated cutover migration.
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,12 +11,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Application login identity. RBAC via `role`; use `disabledAt` for soft-disable without deleting audit-related FKs (future).
 model User {
-  id    String  @id @default(cuid())
-  email String  @unique
-  name  String
-  role  Role
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         Role
   passwordHash String
+  disabledAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([role])
 }
 
 enum Role {
@@ -22,30 +32,36 @@ enum Role {
 }
 
 model Turbine {
-  id         String   @id @default(cuid())
-  name       String
-  manufacturer String?
-  mwRating   Float?
-  lat        Float?
-  lng        Float?
-  inspections Inspection[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String        @id @default(cuid())
+  name           String
+  manufacturer   String?
+  mwRating       Float?
+  lat            Float?
+  lng            Float?
+  inspections    Inspection[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([name])
 }
 
+/// One row per inspection event for a turbine. `date` is the canonical inspection instant used for overlap prevention.
 model Inspection {
-  id            String   @id @default(cuid())
-  date          DateTime
-  inspectorName String?
-  dataSource    DataSource
-  rawPackageUrl String?
-  turbine       Turbine  @relation(fields: [turbineId], references: [id])
-  turbineId     String
-  findings      Finding[]
-  repairPlan    RepairPlan?
-  createdAt     DateTime @default(now())
+  id              String       @id @default(cuid())
+  /// Instant the inspection represents (UTC stored as TIMESTAMP(3)). Uniqueness is per exact timestamp + turbine.
+  date            DateTime
+  inspectorName   String?
+  dataSource      DataSource
+  rawPackageUrl   String?
+  turbine         Turbine      @relation(fields: [turbineId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  turbineId       String
+  findings        Finding[]
+  repairPlan      RepairPlan?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
-  @@index([turbineId, date])
+  /// Prevents two inspections for the same turbine at the exact same stored instant (DB-enforced).
+  @@unique([turbineId, date])
 }
 
 enum DataSource {
@@ -54,16 +70,19 @@ enum DataSource {
 }
 
 model Finding {
-  id            String   @id @default(cuid())
-  category      FindingCategory
-  severity      Int
-  estimatedCost Float
-  notes         String?
-  inspection    Inspection @relation(fields: [inspectionId], references: [id])
-  inspectionId  String
-  createdAt     DateTime @default(now())
+  id             String           @id @default(cuid())
+  category       FindingCategory
+  /// Application rule layer should clamp; DB CHECK enforces bounds for defense in depth.
+  severity       Int
+  estimatedCost  Float
+  notes          String?
+  inspection     Inspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  inspectionId   String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   @@index([inspectionId])
+  @@index([category])
 }
 
 enum FindingCategory {
@@ -73,14 +92,16 @@ enum FindingCategory {
   UNKNOWN
 }
 
+/// At most one repair plan per inspection (`inspectionId` unique). Removed when parent inspection is deleted.
 model RepairPlan {
-  id                 String   @id @default(cuid())
-  inspection         Inspection @relation(fields: [inspectionId], references: [id])
-  inspectionId       String   @unique
+  id                 String       @id @default(cuid())
+  inspection         Inspection   @relation(fields: [inspectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  inspectionId       String       @unique
   priority           Priority
   totalEstimatedCost Float
   snapshotJson       Json
-  createdAt          DateTime @default(now())
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 }
 
 enum Priority {
