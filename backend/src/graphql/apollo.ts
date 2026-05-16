@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import type { Application } from 'express';
 import type { Env } from '../config/env';
 import type { GraphQLContext } from './context';
+import type { RepairPlanGeneratedSsePayload } from '../services/repair-plan.service';
 import { buildResolvers } from './resolvers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,7 +18,7 @@ export async function attachGraphQL(
     env: Env;
     mongoClient: MongoClient | null;
     mongoDbName: string;
-    notifyPlan: (inspectionId: string) => void;
+    notifyRepairPlanGenerated: (payload: RepairPlanGeneratedSsePayload) => void;
   },
 ): Promise<void> {
   const schemaPath = path.join(__dirname, 'schema.graphql');
@@ -28,7 +29,7 @@ export async function attachGraphQL(
     resolvers: buildResolvers({
       mongoClient: deps.mongoClient,
       mongoDbName: deps.mongoDbName,
-      notifyPlan: deps.notifyPlan,
+      notifyRepairPlanGenerated: deps.notifyRepairPlanGenerated,
     }),
     context: ({ req }): GraphQLContext => ({
       authUser: req.authUser ?? null,

@@ -12,10 +12,11 @@ import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found-handler';
 import { requirePermission } from './middleware/require-permission';
 import { createAuthRouter } from './modules/auth/auth.routes';
-import { sseEventsHandler, notifyPlan } from './modules/events/sse.routes';
+import { sseAccessTokenBridge, sseEventsHandler, notifyRepairPlanGenerated } from './modules/events/sse.routes';
 import { healthRouter } from './modules/health/health.routes';
 import { findingsRouter } from './modules/findings/findings.routes';
 import { inspectionsRouter } from './modules/inspections/inspections.routes';
+import { createRepairPlansRouter } from './modules/repair-plans/repair-plans.routes';
 import { turbinesRouter } from './modules/turbines/turbines.routes';
 
 export async function createApp(env: Env, mongoClient: MongoClient | null): Promise<Application> {
@@ -40,7 +41,9 @@ export async function createApp(env: Env, mongoClient: MongoClient | null): Prom
 
   app.use('/api/findings', authenticate, findingsRouter);
 
-  app.get('/api/events', authenticate, requirePermission('read'), sseEventsHandler);
+  app.use('/api/repair-plans', authenticate, createRepairPlansRouter(mongoClient, env.MONGO_DB));
+
+  app.get('/api/events', sseAccessTokenBridge, authenticate, requirePermission('read'), sseEventsHandler);
 
   app.use('/graphql', authenticate);
 
@@ -48,7 +51,7 @@ export async function createApp(env: Env, mongoClient: MongoClient | null): Prom
     env,
     mongoClient,
     mongoDbName: env.MONGO_DB,
-    notifyPlan,
+    notifyRepairPlanGenerated,
   });
 
   app.use(notFoundHandler);

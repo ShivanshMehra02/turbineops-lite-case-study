@@ -2,7 +2,7 @@ import { prisma } from '../db/prisma';
 import { gqlFromService } from './http-mapper';
 import { parseGraphQLInput } from './parse-graphql-input';
 import { ensurePermission } from './guards';
-import { generateRepairPlanForInspection } from '../services/repair-plan.service';
+import { findRepairPlanByInspectionId, generateRepairPlanForInspection, repairPlanPresentation, } from '../services/repair-plan.service';
 import { createInspection, deleteInspection, findInspectionById, listInspections, updateInspection, } from '../services/inspection.service';
 import { createFinding, deleteFinding, findFindingById, listFindings, updateFinding, } from '../services/finding.service';
 import { createTurbine, deleteTurbine, findTurbineById, listTurbines, updateTurbine, } from '../services/turbine.service';
@@ -62,7 +62,7 @@ export function buildResolvers(deps) {
             },
             repairPlan: async (_, args, ctx) => {
                 ensurePermission(ctx, 'read');
-                return prisma.repairPlan.findUnique({ where: { inspectionId: args.inspectionId } });
+                return findRepairPlanByInspectionId(prisma, args.inspectionId);
             },
         },
         Mutation: {
@@ -113,11 +113,11 @@ export function buildResolvers(deps) {
             },
             generateRepairPlan: async (_, args, ctx) => {
                 ensurePermission(ctx, 'write');
-                return generateRepairPlanForInspection(prisma, args.inspectionId, {
+                return gqlFromService(() => generateRepairPlanForInspection(prisma, args.inspectionId, {
                     mongoClient: deps.mongoClient,
                     mongoDbName: deps.mongoDbName,
-                    notifyPlan: deps.notifyPlan,
-                });
+                    notifyRepairPlanGenerated: deps.notifyRepairPlanGenerated,
+                }));
             },
         },
         Turbine: {
@@ -170,7 +170,12 @@ export function buildResolvers(deps) {
             },
         },
         RepairPlan: {
+            inspectionId: (parent) => parent.inspectionId,
             createdAt: (parent) => parent.createdAt.toISOString(),
+            updatedAt: (parent) => parent.updatedAt.toISOString(),
+            summaryText: (parent) => repairPlanPresentation(parent).summaryText,
+            findingCount: (parent) => repairPlanPresentation(parent).findingCount,
+            maxSeverity: (parent) => repairPlanPresentation(parent).maxSeverity,
         },
     };
 }

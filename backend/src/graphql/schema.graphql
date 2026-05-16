@@ -122,9 +122,14 @@ enum Priority {
 
 type RepairPlan {
   id: ID!
+  inspectionId: ID!
   priority: Priority!
   totalEstimatedCost: Float!
+  summaryText: String!
+  findingCount: Int
+  maxSeverity: Int
   createdAt: String!
+  updatedAt: String!
 }
 
 type Query {

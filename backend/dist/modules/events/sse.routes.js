@@ -1,21 +1,39 @@
 const sseClients = new Set();
-export function notifyPlan(inspectionId) {
+/**
+ * Broadcasts to all connected SSE clients after a repair plan is persisted in PostgreSQL.
+ * Also emits legacy `plan` event for older subscribers.
+ */
+export function notifyRepairPlanGenerated(payload) {
+    const body = JSON.stringify({ type: 'repair_plan_generated', ...payload });
+    const legacy = JSON.stringify({
+        inspectionId: payload.inspectionId,
+        repairPlanId: payload.repairPlanId,
+        at: payload.generatedAt,
+    });
     for (const client of sseClients) {
-        client.write(`event: plan
-data: ${JSON.stringify({ inspectionId, at: new Date().toISOString() })}
-
-`);
+        client.write(`event: repair_plan_generated\ndata: ${body}\n\n`);
+        client.write(`event: plan\ndata: ${legacy}\n\n`);
     }
+}
+/**
+ * Browser `EventSource` cannot send `Authorization` headers; allow optional `?access_token=` for this route only.
+ * Prefer header auth when available (server-to-server). Tokens in URLs may appear in logs — use with care.
+ */
+export function sseAccessTokenBridge(req, _res, next) {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ') && typeof req.query.access_token === 'string') {
+        const raw = req.query.access_token.trim();
+        if (raw)
+            req.headers.authorization = `Bearer ${raw}`;
+    }
+    next();
 }
 export const sseEventsHandler = (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
-    res.write(`event: ping
-data: ok
-
-`);
+    res.write(`event: ping\ndata: ok\n\n`);
     sseClients.add(res);
     req.on('close', () => sseClients.delete(res));
 };

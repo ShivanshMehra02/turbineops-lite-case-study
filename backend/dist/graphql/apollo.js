@@ -13,7 +13,7 @@ export async function attachGraphQL(app, deps) {
         resolvers: buildResolvers({
             mongoClient: deps.mongoClient,
             mongoDbName: deps.mongoDbName,
-            notifyPlan: deps.notifyPlan,
+            notifyRepairPlanGenerated: deps.notifyRepairPlanGenerated,
         }),
         context: ({ req }) => ({
             authUser: req.authUser ?? null,

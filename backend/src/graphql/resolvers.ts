@@ -1,10 +1,16 @@
+import type { RepairPlan } from '@prisma/client';
 import type { MongoClient } from 'mongodb';
 import { prisma } from '../db/prisma';
 import type { GraphQLContext } from './context';
 import { gqlFromService } from './http-mapper';
 import { parseGraphQLInput } from './parse-graphql-input';
 import { ensurePermission } from './guards';
-import { generateRepairPlanForInspection } from '../services/repair-plan.service';
+import {
+  findRepairPlanByInspectionId,
+  generateRepairPlanForInspection,
+  repairPlanPresentation,
+  type RepairPlanGeneratedSsePayload,
+} from '../services/repair-plan.service';
 import {
   createInspection,
   deleteInspection,
@@ -45,7 +51,7 @@ import { MAX_LIMIT, DEFAULT_LIMIT, DEFAULT_PAGE } from '../utils/pagination';
 export function buildResolvers(deps: {
   mongoClient: MongoClient | null;
   mongoDbName: string;
-  notifyPlan: (inspectionId: string) => void;
+  notifyRepairPlanGenerated: (payload: RepairPlanGeneratedSsePayload) => void;
 }) {
   return {
     Query: {
@@ -124,7 +130,7 @@ export function buildResolvers(deps: {
       },
       repairPlan: async (_: unknown, args: { inspectionId: string }, ctx: GraphQLContext) => {
         ensurePermission(ctx, 'read');
-        return prisma.repairPlan.findUnique({ where: { inspectionId: args.inspectionId } });
+        return findRepairPlanByInspectionId(prisma, args.inspectionId);
       },
     },
     Mutation: {
@@ -187,11 +193,13 @@ export function buildResolvers(deps: {
       },
       generateRepairPlan: async (_: unknown, args: { inspectionId: string }, ctx: GraphQLContext) => {
         ensurePermission(ctx, 'write');
-        return generateRepairPlanForInspection(prisma, args.inspectionId, {
-          mongoClient: deps.mongoClient,
-          mongoDbName: deps.mongoDbName,
-          notifyPlan: deps.notifyPlan,
-        });
+        return gqlFromService(() =>
+          generateRepairPlanForInspection(prisma, args.inspectionId, {
+            mongoClient: deps.mongoClient,
+            mongoDbName: deps.mongoDbName,
+            notifyRepairPlanGenerated: deps.notifyRepairPlanGenerated,
+          }),
+        );
       },
     },
     Turbine: {
@@ -251,7 +259,12 @@ export function buildResolvers(deps: {
       },
     },
     RepairPlan: {
-      createdAt: (parent: { createdAt: Date }) => parent.createdAt.toISOString(),
+      inspectionId: (parent: RepairPlan) => parent.inspectionId,
+      createdAt: (parent: RepairPlan) => parent.createdAt.toISOString(),
+      updatedAt: (parent: RepairPlan) => parent.updatedAt.toISOString(),
+      summaryText: (parent: RepairPlan) => repairPlanPresentation(parent).summaryText,
+      findingCount: (parent: RepairPlan) => repairPlanPresentation(parent).findingCount,
+      maxSeverity: (parent: RepairPlan) => repairPlanPresentation(parent).maxSeverity,
     },
   };
 }

@@ -43,6 +43,7 @@ export const App: React.FC = () => {
   const limit = 10
   const [name, setName] = useState('')
   const [apiError, setApiError] = useState<string | null>(null)
+  const [sseLines, setSseLines] = useState<string[]>([])
 
   const authHeaders = useCallback(
     (base?: HeadersInit): HeadersInit => ({
@@ -51,6 +52,26 @@ export const App: React.FC = () => {
     }),
     [token],
   )
+
+  useEffect(() => {
+    if (!token || !apiBase) return
+    const url = `${apiBase}/api/events?access_token=${encodeURIComponent(token)}`
+    const es = new EventSource(url)
+    const onGenerated = (ev: MessageEvent<string>) => {
+      try {
+        const d = JSON.parse(ev.data) as Record<string, unknown>
+        const line = `[repair_plan_generated] inspection=${String(d.inspectionId ?? '')} plan=${String(d.repairPlanId ?? '')} ${String(d.priority ?? '')}`
+        setSseLines((prev) => [line, ...prev].slice(0, 20))
+      } catch {
+        setSseLines((prev) => [ev.data, ...prev].slice(0, 20))
+      }
+    }
+    es.addEventListener('repair_plan_generated', onGenerated as EventListener)
+    return () => {
+      es.removeEventListener('repair_plan_generated', onGenerated as EventListener)
+      es.close()
+    }
+  }, [token, apiBase])
 
   const loadTurbines = useCallback(async () => {
     if (!token) return
@@ -213,6 +234,23 @@ export const App: React.FC = () => {
       </div>
 
       {apiError ? <p style={{ color: 'crimson' }}>{apiError}</p> : null}
+
+      <section style={{ marginTop: 20, padding: 12, background: '#f7f7fb', borderRadius: 8, maxWidth: 720 }}>
+        <h2 style={{ marginTop: 0, fontSize: 16 }}>Realtime · repair plans (SSE)</h2>
+        <p style={{ marginTop: 0, fontSize: 13, color: '#444' }}>
+          Subscribes to <code>/api/events</code> with your token (query param required for browser EventSource).
+          When an engineer generates a plan, you should see a <code>repair_plan_generated</code> event.
+        </p>
+        {sseLines.length === 0 ? (
+          <p style={{ fontSize: 13, color: '#666' }}>No events yet.</p>
+        ) : (
+          <ul style={{ fontSize: 12, fontFamily: 'monospace', margin: 0, paddingLeft: 18 }}>
+            {sseLines.map((line, i) => (
+              <li key={`${i}-${line.slice(0, 24)}`}>{line}</li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {user.role !== 'VIEWER' ? (
         <div style={{ marginTop: 16 }}>

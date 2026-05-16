@@ -386,6 +386,60 @@ paths:
         '401': { description: Unauthorized }
         '403': { description: Forbidden }
         '404': { description: Not found }
+  /repair-plans/by-inspection/{inspectionId}:
+    get:
+      summary: Get repair plan by inspection id (VIEWER+). PostgreSQL is authoritative.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RepairPlanInspectionId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepairPlan'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: No repair plan for this inspection }
+  /repair-plans/generate:
+    post:
+      summary: Generate or refresh repair plan from findings (ENGINEER+). Emits SSE `repair_plan_generated`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RepairPlanGenerateRest'
+      responses:
+        '201':
+          description: Created or updated (upsert per inspection)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepairPlan'
+        '400': { description: Validation error }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Inspection not found }
+  /events:
+    get:
+      summary: Server-Sent Events stream (repair plan notifications). Use Bearer auth or `access_token` query for browsers.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: access_token
+          description: Optional JWT when EventSource cannot send Authorization header
+          schema: { type: string }
+      responses:
+        '200':
+          description: text/event-stream — events `ping`, `repair_plan_generated`, legacy `plan`
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
 components:
   securitySchemes:
     bearerAuth:
@@ -407,6 +461,12 @@ components:
         type: string
     FindingId:
       name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    RepairPlanInspectionId:
+      name: inspectionId
       in: path
       required: true
       schema:
@@ -591,3 +651,22 @@ components:
         severity: { type: integer, minimum: 1, maximum: 5 }
         estimated_cost: { type: number, minimum: 0 }
         notes: { type: string, nullable: true }
+    RepairPlan:
+      type: object
+      properties:
+        id: { type: string }
+        inspectionId: { type: string }
+        priority:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+        totalEstimatedCost: { type: number }
+        snapshotJson:
+          type: object
+          description: Versioned snapshot — summary plus serialized findings (PostgreSQL source of truth)
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RepairPlanGenerateRest:
+      type: object
+      required: [inspection_id]
+      properties:
+        inspection_id: { type: string }
