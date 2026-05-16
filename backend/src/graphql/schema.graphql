@@ -5,7 +5,32 @@ type Turbine {
   mwRating: Float
   lat: Float
   lng: Float
+  createdAt: String!
+  updatedAt: String!
   inspections: [Inspection!]!
+}
+
+type TurbineConnection {
+  items: [Turbine!]!
+  totalCount: Int!
+  page: Int!
+  limit: Int!
+}
+
+input TurbineCreateInput {
+  name: String!
+  manufacturer: String
+  mwRating: Float
+  lat: Float
+  lng: Float
+}
+
+input TurbineUpdateInput {
+  name: String
+  manufacturer: String
+  mwRating: Float
+  lat: Float
+  lng: Float
 }
 
 enum DataSource {
@@ -53,10 +78,15 @@ type RepairPlan {
 }
 
 type Query {
+  turbines(page: Int, limit: Int, nameContains: String): TurbineConnection!
+  turbine(id: ID!): Turbine
   inspection(id: ID!): Inspection
   repairPlan(inspectionId: ID!): RepairPlan
 }
 
 type Mutation {
+  createTurbine(input: TurbineCreateInput!): Turbine!
+  updateTurbine(id: ID!, input: TurbineUpdateInput!): Turbine!
+  deleteTurbine(id: ID!): Boolean!
   generateRepairPlan(inspectionId: ID!): RepairPlan!
 }

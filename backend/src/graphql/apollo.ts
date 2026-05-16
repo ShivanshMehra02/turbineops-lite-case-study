@@ -35,7 +35,14 @@ export async function attachGraphQL(
     }),
     formatError: (err) => {
       const code = err.extensions?.code;
-      if (code === 'UNAUTHENTICATED' || code === 'FORBIDDEN') {
+      const safe =
+        code === 'UNAUTHENTICATED' ||
+        code === 'FORBIDDEN' ||
+        code === 'BAD_USER_INPUT' ||
+        code === 'NOT_FOUND' ||
+        code === 'CONFLICT' ||
+        code === 'VALIDATION_ERROR';
+      if (safe) {
         return err;
       }
       if (deps.env.NODE_ENV === 'production') {

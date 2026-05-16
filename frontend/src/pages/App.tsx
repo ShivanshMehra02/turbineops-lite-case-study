@@ -1,16 +1,46 @@
 import React, { useCallback, useEffect, useState } from 'react'
 
-type Turbine = { id: string; name: string }
+type Turbine = {
+  id: string
+  name: string
+  manufacturer?: string | null
+  mwRating?: number | null
+  lat?: number | null
+  lng?: number | null
+}
+
+type TurbineListResponse = {
+  items: Turbine[]
+  totalCount: number
+  page: number
+  limit: number
+}
+
+type AuthUser = { id: string; email: string; name: string; role: 'ADMIN' | 'ENGINEER' | 'VIEWER' }
 
 const TOKEN_KEY = 'turbineops_access_token'
+const USER_KEY = 'turbineops_user'
 
 export const App: React.FC = () => {
   const apiBase = import.meta.env.VITE_API_BASE as string
   const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) ?? '')
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const raw = sessionStorage.getItem(USER_KEY)
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as AuthUser
+    } catch {
+      return null
+    }
+  })
   const [email, setEmail] = useState('viewer@example.com')
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
-  const [turbines, setTurbines] = useState<Turbine[]>([])
+  const [list, setList] = useState<TurbineListResponse | null>(null)
+  const [page, setPage] = useState(1)
+  const [nameFilter, setNameFilter] = useState('')
+  const [appliedFilter, setAppliedFilter] = useState('')
+  const limit = 10
   const [name, setName] = useState('')
   const [apiError, setApiError] = useState<string | null>(null)
 
@@ -22,26 +52,28 @@ export const App: React.FC = () => {
     [token],
   )
 
-  useEffect(() => {
-    if (!token) {
-      setTurbines([])
+  const loadTurbines = useCallback(async () => {
+    if (!token) return
+    setApiError(null)
+    const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+    if (appliedFilter.trim()) qs.set('name', appliedFilter.trim())
+    const r = await fetch(`${apiBase}/api/turbines?${qs.toString()}`, { headers: authHeaders() })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      setList(null)
+      setApiError((data as { error?: string }).error ?? r.statusText)
       return
     }
-    setApiError(null)
-    fetch(`${apiBase}/api/turbines`, { headers: authHeaders() })
-      .then(async (r) => {
-        if (!r.ok) {
-          const j = await r.json().catch(() => ({}))
-          throw new Error((j as { error?: string }).error ?? r.statusText)
-        }
-        return r.json()
-      })
-      .then(setTurbines)
-      .catch((e: Error) => {
-        setTurbines([])
-        setApiError(e.message)
-      })
-  }, [apiBase, authHeaders, token])
+    setList(data as TurbineListResponse)
+  }, [apiBase, appliedFilter, authHeaders, limit, page, token])
+
+  useEffect(() => {
+    if (!token) {
+      setList(null)
+      return
+    }
+    void loadTurbines()
+  }, [loadTurbines, token])
 
   const login = async () => {
     setLoginError(null)
@@ -56,21 +88,27 @@ export const App: React.FC = () => {
       return
     }
     const accessToken = (data as { accessToken?: string }).accessToken
-    if (!accessToken) {
-      setLoginError('No token in response')
+    const u = (data as { user?: AuthUser }).user
+    if (!accessToken || !u) {
+      setLoginError('No token/user in response')
       return
     }
     sessionStorage.setItem(TOKEN_KEY, accessToken)
+    sessionStorage.setItem(USER_KEY, JSON.stringify(u))
     setToken(accessToken)
+    setUser(u)
+    setPage(1)
   }
 
   const logout = () => {
     sessionStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(USER_KEY)
     setToken('')
+    setUser(null)
   }
 
   const create = async () => {
-    if (!name || !token) return
+    if (!name || !token || user?.role === 'VIEWER') return
     setApiError(null)
     const r = await fetch(`${apiBase}/api/turbines`, {
       method: 'POST',
@@ -82,16 +120,38 @@ export const App: React.FC = () => {
       setApiError((data as { error?: string }).error ?? 'Create failed')
       return
     }
-    const t = data as Turbine
-    setTurbines((prev) => [t, ...prev])
     setName('')
+    setPage(1)
+    await loadTurbines()
   }
 
-  if (!token) {
+  const remove = async (id: string) => {
+    if (!token || user?.role !== 'ADMIN') return
+    setApiError(null)
+    const r = await fetch(`${apiBase}/api/turbines/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    })
+    if (!r.ok && r.status !== 204) {
+      const data = await r.json().catch(() => ({}))
+      setApiError((data as { error?: string }).error ?? 'Delete failed')
+      return
+    }
+    await loadTurbines()
+  }
+
+  const applyFilter = () => {
+    setAppliedFilter(nameFilter)
+    setPage(1)
+  }
+
+  const totalPages = list ? Math.max(1, Math.ceil(list.totalCount / list.limit)) : 1
+
+  if (!token || !user) {
     return (
       <div style={{ padding: 24, fontFamily: 'sans-serif', maxWidth: 420 }}>
         <h1>TurbineOps Lite</h1>
-        <p>Sign in to access the API (viewer = read-only; engineer/admin can create turbines).</p>
+        <p>Sign in to access turbines (viewer read-only; engineer/admin can create; admin can delete).</p>
         {loginError ? <p style={{ color: 'crimson' }}>{loginError}</p> : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
@@ -114,25 +174,67 @@ export const App: React.FC = () => {
 
   return (
     <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ margin: 0 }}>TurbineOps Lite</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+        <div>
+          <h1 style={{ margin: 0 }}>TurbineOps Lite</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#444' }}>
+            Signed in as {user.email} ({user.role})
+          </p>
+        </div>
         <button type="button" onClick={logout}>
           Log out
         </button>
       </div>
-      <p>List/create turbines via REST (requires Bearer token — stored in session for this demo).</p>
-      {apiError ? <p style={{ color: 'crimson' }}>{apiError}</p> : null}
 
-      <div style={{ marginBottom: 16 }}>
-        <input placeholder="New turbine name" value={name} onChange={(e) => setName(e.target.value)} />
-        <button type="button" onClick={() => void create()} style={{ marginLeft: 8 }}>
-          Create
+      <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <input
+          placeholder="Filter name contains…"
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+          style={{ minWidth: 220 }}
+        />
+        <button type="button" onClick={applyFilter}>
+          Apply filter
         </button>
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Prev
+        </button>
+        <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+          Next
+        </button>
+        <span style={{ fontSize: 13, color: '#444' }}>
+          Page {page} / {totalPages}
+          {list ? ` · ${list.totalCount} total` : null}
+        </span>
       </div>
 
-      <ul>
-        {turbines.map((t) => (
-          <li key={t.id}>{t.name}</li>
+      {apiError ? <p style={{ color: 'crimson' }}>{apiError}</p> : null}
+
+      {user.role !== 'VIEWER' ? (
+        <div style={{ marginTop: 16 }}>
+          <input placeholder="New turbine name" value={name} onChange={(e) => setName(e.target.value)} />
+          <button type="button" onClick={() => void create()} style={{ marginLeft: 8 }}>
+            Create
+          </button>
+        </div>
+      ) : (
+        <p style={{ marginTop: 16, fontSize: 13, color: '#444' }}>Viewer role: read-only.</p>
+      )}
+
+      <ul style={{ marginTop: 16 }}>
+        {(list?.items ?? []).map((t) => (
+          <li key={t.id} style={{ marginBottom: 8 }}>
+            <strong>{t.name}</strong>
+            {user.role === 'ADMIN' ? (
+              <button type="button" style={{ marginLeft: 12 }} onClick={() => void remove(t.id)}>
+                Delete
+              </button>
+            ) : null}
+          </li>
         ))}
       </ul>
     </div>

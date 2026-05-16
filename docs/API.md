@@ -18,7 +18,7 @@ curl -s -X POST http://localhost:4000/api/auth/login \
 
 ```bash
 TOKEN="<paste accessToken>"
-curl -s http://localhost:4000/api/turbines \
+curl -s "http://localhost:4000/api/turbines?page=1&limit=20&name=T-" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -32,6 +32,24 @@ curl -s http://localhost:4000/graphql \
 ```
 
 Seeded accounts (after `npm run seed`): `admin@example.com` / `admin123`, `eng@example.com` / `engineer123`, `viewer@example.com` / `viewer123`.
+
+## Turbines
+
+REST (requires Bearer):
+
+| Method | Path | RBAC | Notes |
+|--------|------|------|--------|
+| GET | `/api/turbines` | VIEWER+ | Paginated JSON `{ items, totalCount, page, limit }`. Query: `page`, `limit` (max 100), `name` (case-insensitive substring). |
+| GET | `/api/turbines/:id` | VIEWER+ | Single turbine; `404` if missing. |
+| POST | `/api/turbines` | ENGINEER+ | Create (`name` required; optional `manufacturer`, `mwRating`, `lat`, `lng`, nullable fields allowed). |
+| PATCH | `/api/turbines/:id` | ENGINEER+ | Partial update; at least one field required. |
+| DELETE | `/api/turbines/:id` | ADMIN | Deletes when no dependent inspections; otherwise `409`. |
+
+GraphQL (requires Bearer):
+
+- `turbines(page, limit, nameContains): TurbineConnection!` — same semantics as REST list.
+- `turbine(id): Turbine` — nullable when missing.
+- `createTurbine(input)`, `updateTurbine(id, input)`, `deleteTurbine(id)` — same RBAC as REST (`deleteTurbine` is ADMIN-only).
 
 ## REST (OpenAPI)
 
