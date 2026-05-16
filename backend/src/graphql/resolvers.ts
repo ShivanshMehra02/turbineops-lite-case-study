@@ -1,5 +1,7 @@
 import type { MongoClient } from 'mongodb';
 import { prisma } from '../db/prisma';
+import type { GraphQLContext } from './context';
+import { ensurePermission } from './guards';
 import { generateRepairPlanForInspection } from '../services/repair-plan.service';
 
 export function buildResolvers(deps: {
@@ -9,21 +11,27 @@ export function buildResolvers(deps: {
 }) {
   return {
     Query: {
-      inspection: async (_: unknown, { id }: { id: string }) =>
-        prisma.inspection.findUnique({
-          where: { id },
+      inspection: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
+        ensurePermission(ctx, 'read');
+        return prisma.inspection.findUnique({
+          where: { id: args.id },
           include: { turbine: true, findings: true, repairPlan: true },
-        }),
-      repairPlan: async (_: unknown, { inspectionId }: { inspectionId: string }) =>
-        prisma.repairPlan.findUnique({ where: { inspectionId } }),
+        });
+      },
+      repairPlan: async (_: unknown, args: { inspectionId: string }, ctx: GraphQLContext) => {
+        ensurePermission(ctx, 'read');
+        return prisma.repairPlan.findUnique({ where: { inspectionId: args.inspectionId } });
+      },
     },
     Mutation: {
-      generateRepairPlan: async (_: unknown, { inspectionId }: { inspectionId: string }) =>
-        generateRepairPlanForInspection(prisma, inspectionId, {
+      generateRepairPlan: async (_: unknown, args: { inspectionId: string }, ctx: GraphQLContext) => {
+        ensurePermission(ctx, 'write');
+        return generateRepairPlanForInspection(prisma, args.inspectionId, {
           mongoClient: deps.mongoClient,
           mongoDbName: deps.mongoDbName,
           notifyPlan: deps.notifyPlan,
-        }),
+        });
+      },
     },
   };
 }

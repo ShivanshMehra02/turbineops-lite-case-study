@@ -17,7 +17,7 @@ make seed
 make backend
 make frontend
 
-# Open: http://localhost:5173  (frontend)
+# Open: http://localhost:5173  (sign in — seeded users in `docs/API.md`)
 # REST base: http://localhost:4000/api
 # GraphQL:   http://localhost:4000/graphql
 ```

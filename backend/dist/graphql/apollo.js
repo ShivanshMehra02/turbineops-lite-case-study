@@ -1,4 +1,5 @@
 import { ApolloServer } from 'apollo-server-express';
+import { GraphQLError } from 'graphql';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,7 +10,26 @@ export async function attachGraphQL(app, deps) {
     const typeDefs = readFileSync(schemaPath, 'utf8');
     const server = new ApolloServer({
         typeDefs,
-        resolvers: buildResolvers(deps),
+        resolvers: buildResolvers({
+            mongoClient: deps.mongoClient,
+            mongoDbName: deps.mongoDbName,
+            notifyPlan: deps.notifyPlan,
+        }),
+        context: ({ req }) => ({
+            authUser: req.authUser ?? null,
+        }),
+        formatError: (err) => {
+            const code = err.extensions?.code;
+            if (code === 'UNAUTHENTICATED' || code === 'FORBIDDEN') {
+                return err;
+            }
+            if (deps.env.NODE_ENV === 'production') {
+                return new GraphQLError('Internal server error', {
+                    extensions: { code: 'INTERNAL_SERVER_ERROR' },
+                });
+            }
+            return err;
+        },
     });
     await server.start();
     // @ts-expect-error Apollo Server 3 typings use a nested @types/express copy; app is a valid Express instance at runtime.
