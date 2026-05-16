@@ -1,9 +1,20 @@
 FROM node:20-alpine
 WORKDIR /app
+
+# Prisma CLI + engines expect OpenSSL on Alpine
+RUN apk add --no-cache openssl
+
 COPY package*.json ./
-RUN npm install
+# postinstall runs `prisma generate` but schema is not copied yet — skip lifecycle scripts here
+RUN npm ci --ignore-scripts
+
 COPY . .
-RUN npm run build && npx prisma generate
+RUN chmod +x docker-entrypoint.sh \
+  && npx prisma generate \
+  && npm run build \
+  && cp src/graphql/schema.graphql dist/schema.graphql
+
 ENV NODE_ENV=production
 EXPOSE 4000
-CMD ["sh", "-c", "npm run prisma:deploy && node dist/main.js"]
+
+ENTRYPOINT ["./docker-entrypoint.sh"]

@@ -2,6 +2,8 @@ import React from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { CssBaseline, ThemeProvider } from '@mui/material'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { AuthProvider } from './auth/AuthContext'
 import { AppRouter } from './routes/AppRouter'
 import { appTheme } from './theme/theme'
@@ -24,13 +26,15 @@ export function App(): React.ReactElement {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={appTheme}>
-        <CssBaseline />
-        <AuthProvider>
-          <BrowserRouter>
-            <SseBridge />
-            <AppRouter />
-          </BrowserRouter>
-        </AuthProvider>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <CssBaseline />
+          <AuthProvider>
+            <BrowserRouter>
+              <SseBridge />
+              <AppRouter />
+            </BrowserRouter>
+          </AuthProvider>
+        </LocalizationProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )

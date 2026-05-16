@@ -24,3 +24,47 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://app:app@postgres:5432/turbineops
+      MONGO_URL: mongodb://mongo:27017
+      MONGO_DB: turbineops
+      # Must be ≥32 chars when NODE_ENV=production (see backend/src/config/env.ts)
+      JWT_SECRET: turbineops-lite-compose-jwt-secret-32-minimum-chars
+      NODE_ENV: production
+      PORT: "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "require(\"http\").get(\"http://127.0.0.1:4000/api/healthz\",r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on(\"error\",()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE: http://localhost:4000
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy

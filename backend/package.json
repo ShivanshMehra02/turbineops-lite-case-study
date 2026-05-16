@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/main.js",
+    "build:bundle": "esbuild src/main.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/main.mjs --packages=external && esbuild src/seed.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/seed.mjs --packages=external",
+    "build": "tsc -p tsconfig.json && npm run build:bundle",
+    "start": "node dist/main.mjs",
     "lint": "eslint .",
     "test": "jest",
     "postinstall": "prisma generate",
@@ -14,7 +15,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "preseed": "npm run build",
-    "seed": "node dist/seed.js"
+    "seed": "node dist/seed.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.19.0",
@@ -25,11 +26,11 @@
     "express": "^4.19.2",
     "graphql": "^16.9.0",
     "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.8.0",
     "multer": "^1.4.5-lts.1",
     "swagger-ui-express": "^5.0.1",
     "yaml": "^2.5.0",
-    "zod": "^3.23.8",
-    "mongodb": "^6.8.0"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.2",
@@ -37,8 +38,9 @@
     "@types/jest": "^29.5.12",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.14.10",
-    "@types/swagger-ui-express": "^4.1.8",
     "@types/supertest": "^2.0.15",
+    "@types/swagger-ui-express": "^4.1.8",
+    "esbuild": "^0.28.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "jest": "^29.7.0",

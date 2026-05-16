@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   Box,
   Button,
@@ -15,8 +15,8 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Typography,
+  useTheme,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
@@ -35,6 +35,8 @@ import { getAxiosMessage } from '../api/client'
 import { InspectionFormDialog } from '../components/inspections/InspectionFormDialog'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { EmptyState, ErrorAlert, LoadingState } from '../components/common/Feedback'
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker'
+import type { Dayjs } from 'dayjs'
 import { useRbac } from '../hooks/useRbac'
 import type { DataSource, Inspection } from '../types/domain'
 
@@ -42,11 +44,12 @@ const ROWS = 10
 
 export function InspectionsPage(): React.ReactElement {
   const qc = useQueryClient()
+  const theme = useTheme()
   const { canWrite, canAdmin } = useRbac()
   const [page, setPage] = useState(0)
   const [turbineId, setTurbineId] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [from, setFrom] = useState<Dayjs | null>(null)
+  const [to, setTo] = useState<Dayjs | null>(null)
   const [dataSource, setDataSource] = useState<DataSource | ''>('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editRow, setEditRow] = useState<Inspection | null>(null)
@@ -58,14 +61,14 @@ export function InspectionsPage(): React.ReactElement {
   })
 
   const listQ = useQuery({
-    queryKey: ['inspections', page + 1, ROWS, turbineId, from, to, dataSource],
+    queryKey: ['inspections', page + 1, ROWS, turbineId, from?.valueOf() ?? null, to?.valueOf() ?? null, dataSource],
     queryFn: () =>
       fetchInspections({
         page: page + 1,
         limit: ROWS,
         ...(turbineId ? { turbine_id: turbineId } : {}),
-        ...(from ? { from: new Date(from).toISOString() } : {}),
-        ...(to ? { to: new Date(to).toISOString() } : {}),
+        ...(from ? { from: from.toDate().toISOString() } : {}),
+        ...(to ? { to: to.toDate().toISOString() } : {}),
         ...(dataSource ? { data_source: dataSource } : {}),
       }),
   })
@@ -86,6 +89,26 @@ export function InspectionsPage(): React.ReactElement {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['inspections'] }),
   })
 
+  const dateTimePickersSlotProps = useMemo(
+    () => ({
+      textField: {
+        size: 'small' as const,
+        sx: {
+          width: '100%',
+          minWidth: { xs: undefined, md: 272 },
+          maxWidth: { xs: '100%', md: 320 },
+        },
+      },
+      popper: {
+        placement: 'bottom-start' as const,
+        sx: {
+          zIndex: theme.zIndex.modal,
+        },
+      },
+    }),
+    [theme.zIndex.modal],
+  )
+
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
@@ -95,13 +118,26 @@ export function InspectionsPage(): React.ReactElement {
         Filter by turbine, instant range, or data source. Open detail for findings & repair plans.
       </Typography>
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap">
-        <FormControl size="small" sx={{ minWidth: 200 }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        useFlexGap
+        sx={{
+          mb: 2,
+          alignItems: 'flex-start',
+          flexWrap: { md: 'wrap' },
+          position: 'relative',
+          isolation: 'isolate',
+          overflow: 'visible',
+        }}
+      >
+        <FormControl size="small" sx={{ width: '100%', minWidth: { md: 200 }, maxWidth: { md: 280 }, flexShrink: 0 }}>
           <InputLabel>Turbine</InputLabel>
           <Select
             label="Turbine"
             value={turbineId}
             onChange={(e) => { setTurbineId(e.target.value as string); setPage(0) }}
+            MenuProps={{ disableScrollLock: true }}
           >
             <MenuItem value="">All</MenuItem>
             {(turbinesQ.data?.items ?? []).map((t) => (
@@ -111,28 +147,37 @@ export function InspectionsPage(): React.ReactElement {
             ))}
           </Select>
         </FormControl>
-        <TextField
-          size="small"
-          label="From"
-          type="datetime-local"
-          InputLabelProps={{ shrink: true }}
-          value={from}
-          onChange={(e) => { setFrom(e.target.value); setPage(0) }}
-        />
-        <TextField
-          size="small"
-          label="To"
-          type="datetime-local"
-          InputLabelProps={{ shrink: true }}
-          value={to}
-          onChange={(e) => { setTo(e.target.value); setPage(0) }}
-        />
-        <FormControl size="small" sx={{ minWidth: 160 }}>
+        <Box sx={{ width: '100%', minWidth: { md: 272 }, maxWidth: { md: 320 }, flexShrink: 0, overflow: 'visible' }}>
+          <DateTimePicker
+            label="From"
+            value={from}
+            onChange={(v) => {
+              setFrom(v)
+              setPage(0)
+            }}
+            format="MMM D, YYYY h:mm A"
+            slotProps={dateTimePickersSlotProps}
+          />
+        </Box>
+        <Box sx={{ width: '100%', minWidth: { md: 272 }, maxWidth: { md: 320 }, flexShrink: 0, overflow: 'visible' }}>
+          <DateTimePicker
+            label="To"
+            value={to}
+            onChange={(v) => {
+              setTo(v)
+              setPage(0)
+            }}
+            format="MMM D, YYYY h:mm A"
+            slotProps={dateTimePickersSlotProps}
+          />
+        </Box>
+        <FormControl size="small" sx={{ width: '100%', minWidth: { md: 160 }, maxWidth: { md: 220 }, flexShrink: 0 }}>
           <InputLabel>Data source</InputLabel>
           <Select
             label="Data source"
             value={dataSource}
             onChange={(e) => { setDataSource(e.target.value as DataSource | ''); setPage(0) }}
+            MenuProps={{ disableScrollLock: true }}
           >
             <MenuItem value="">All</MenuItem>
             <MenuItem value="DRONE">DRONE</MenuItem>
@@ -146,6 +191,7 @@ export function InspectionsPage(): React.ReactElement {
               setEditRow(null)
               setDialogOpen(true)
             }}
+            sx={{ flexShrink: 0 }}
           >
             New inspection
           </Button>

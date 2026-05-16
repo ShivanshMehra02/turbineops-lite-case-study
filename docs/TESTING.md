@@ -21,7 +21,7 @@ export INTEGRATION_TESTS=1
 npm test
 ```
 
-CI enables this automatically (Postgres service + `prisma migrate deploy` + `node dist/seed.js`).
+CI enables this automatically (Postgres service + `prisma migrate deploy` + `node dist/seed.mjs`).
 
 The integration file boots the real Express app and exercises login, JWT middleware, and REST RBAC. GraphQL Apollo startup is stubbed in that suite only so ts-jest does not need to compile `import.meta` in `graphql/apollo.ts`—transport coverage is REST-focused by design.
 

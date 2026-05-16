@@ -1,6 +1,12 @@
 import 'dotenv/config';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
+import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
+/** Avoid pulling `graphql/apollo.ts` into ts-jest (import.meta); REST stack is what we exercise here. */
+jest.mock('../graphql/apollo', () => ({
+    attachGraphQL: jest.fn(async () => {
+        /* no-op: transport tests target REST + auth + RBAC */
+    }),
+}));
 import { createApp } from '../app';
 import { loadEnv } from '../config/env';
 import { prisma } from '../db/prisma';

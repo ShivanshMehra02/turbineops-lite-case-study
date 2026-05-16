@@ -22,4 +22,6 @@ make frontend
 # GraphQL:   http://localhost:4000/graphql
 ```
 
+**Docker:** `docker compose up --build` → UI at http://localhost:3000, API at http://localhost:4000 (see `docs/INSTALL.md`).
+
 See `docs/INSTALL.md` and `docs/API.md` for details.

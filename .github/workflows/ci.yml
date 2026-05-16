@@ -38,7 +38,7 @@ jobs:
           npm ci
           npm run build
           npx prisma migrate deploy
-          node dist/seed.js
+          node dist/seed.mjs
           npm test -- --passWithNoTests
       - name: Frontend
         run: |
